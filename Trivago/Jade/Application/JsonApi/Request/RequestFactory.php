@@ -117,10 +117,11 @@ class RequestFactory
         $resourceConfig = $this->resourceConfigProvider->getResourceConfig($resourceName);
         $relationships = $this->getRelationships($resourceName, $query->get('include', ''));
         $rawFilters = $query->get('filter', '[]');
-        if (!is_string($rawFilters)) {
-            throw InvalidRequest::createWithMessage('data.filter', 'invalid_format', 'Filter has to be json string.');
+        if (is_string($rawFilters)) {
+            $rawFilters = urldecode($rawFilters);
+            $rawFilters = \json_decode($rawFilters, true);
+            //throw InvalidRequest::createWithMessage('data.filter', 'invalid_format', 'Filter has to be json string.');
         }
-        $rawFilters = \json_decode($rawFilters, true);
         if (!is_array($rawFilters)) {
             throw InvalidRequest::createWithMessage('data.filter', 'invalid_format', 'Invalid json format passed for filter.');
         }
