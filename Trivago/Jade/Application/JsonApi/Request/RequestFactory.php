@@ -130,7 +130,7 @@ class RequestFactory
 
         $this->validateFiltersOnRelationship($constraint->getFilters(), $relationships);
 
-        $this->validatePaths($resourceName, 'data.filter', $constraint->getFilterCollection()->getAllPaths(), false);
+        $this->validatePaths($resourceName, 'data.filter', $constraint->getFilterCollection()->getAllPaths(), true);
 
         $sortCollection = $this->parseSorts($resourceConfig, $query->get('sort', ''));
 
