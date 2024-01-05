@@ -18,6 +18,7 @@
 
 namespace Trivago\Jade\Application\Framework\JadeBundle\Routing;
 
+use Trivago\Jade\Application\Framework\JadeBundle\Controller\JsonApiController;
 use Trivago\Jade\Application\JsonApi\Config\ResourceConfig;
 use Trivago\Jade\Application\JsonApi\Config\ResourceConfigProvider;
 use Symfony\Component\Config\Loader\Loader;
@@ -159,7 +160,7 @@ class JsonApiLoader extends Loader
     {
         $resourceName = $resourceConfig->getName();
         $defaults = [
-            '_controller' => 'trivago_jade.json_api_controller:'.$controllerAction.'Action',
+            '_controller' => [JsonApiController::class, $controllerAction.'Action'],
             'resourceName' => $resourceName,
         ];
 

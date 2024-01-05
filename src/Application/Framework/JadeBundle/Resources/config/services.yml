@@ -1,5 +1,5 @@
 services:
-    trivago_jade.json_api_controller:
+    Trivago\Jade\Application\Framework\JadeBundle\Controller\JsonApiController:
         class: Trivago\Jade\Application\Framework\JadeBundle\Controller\JsonApiController
         arguments:
             - "@trivago_jade.resource_config_provider"
@@ -8,7 +8,11 @@ services:
             - "@trivago_jade.listener_manager"
             - "@request_stack"
         public: true
-        tags: ['controller.service_arguments']
+        tags:
+          - 'controller.service_arguments'
+          - 'container.service_subscriber'
+        calls:
+          -   setContainer: [ '@Psr\Container\ContainerInterface' ]
 
     trivago_jade.listener_manager:
         class: Trivago\Jade\Application\Listener\ListenerManager
@@ -53,6 +57,9 @@ services:
             - "%json_api_create_method%"
             - "%json_api_on_update_method%"
 
+    Trivago\Jade\Domain\ResourceManager\GenericResourceManager:
+        alias: 'trivago_jade.generic_resource_manager'
+
     trivago_jade.request_factory:
         class: Trivago\Jade\Application\JsonApi\Request\RequestFactory
         arguments:
@@ -63,7 +70,7 @@ services:
             - "%json_api_strict_filtering_and_sorting%"
             - "%json_api_debug%"
 
-    trivago_jade.resource_mapper.runtime_mapper:
+    Trivago\Jade\Application\JsonApi\Mapping\RuntimeResourceMapper:
         public: true
         class: Trivago\Jade\Application\JsonApi\Mapping\RuntimeResourceMapper
         arguments:
@@ -71,6 +78,6 @@ services:
             - "@security.authorization_checker"
             - "@security.token_storage"
 
-    trivago_jade.resource_mapper:
+    Trivago\Jade\Domain\Mapping\ResourceMapper:
         public: true
-        alias: trivago_jade.resource_mapper.runtime_mapper
+        alias: Trivago\Jade\Application\JsonApi\Mapping\RuntimeResourceMapper

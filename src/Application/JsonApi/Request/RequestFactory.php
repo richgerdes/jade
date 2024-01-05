@@ -110,7 +110,7 @@ class RequestFactory
         $fields = [];
         $constraint = new Constraint();
         $defaultPage = ['number' => 1, 'size' => $this->defaultPerPage];
-        $page = array_merge($defaultPage, $query->get('page', []));
+        $page = array_merge($defaultPage, $query->filter('page', [], \FILTER_DEFAULT, ['flags' => \FILTER_REQUIRE_ARRAY]));
         $defaultPage['size'] = min($defaultPage['size'], $this->maxPerPage);
         $constraint->setPerPage($page['size']);
         $constraint->setPageNumber($page['number']);
@@ -177,15 +177,19 @@ class RequestFactory
     public function createUpdateRequest(Request $request, $resourceName, $resourceId)
     {
         $this->prepareRequest($request);
-        $this->requestValidator->validateUpdateRequest($request->request->all(), $resourceName, $resourceId);
+
+        $request_body = json_decode($request->getContent(), true);
+
+        $this->requestValidator->validateUpdateRequest($request_body, $resourceName, $resourceId);
+
+        $data = $this->getData($request, true);
 
         $request = new UpdateRequest(
             $resourceName,
             $resourceId,
-            $this->createAttributeBag($resourceName, $request->request->get('data')),
+            $this->createAttributeBag($resourceName, $data),
             $this->createRelationshipBag(
-                $request->request->get('data'),
-                $request->request->get('data_as_object'),
+                $data,
                 true
             )
         );
@@ -208,14 +212,16 @@ class RequestFactory
     public function createCreateRequest(Request $request, $resourceName)
     {
         $this->prepareRequest($request);
-        $this->requestValidator->validateCreateRequest($request->request->all(), $resourceName);
+        $request_body = json_decode($request->getContent(), true);
+        $this->requestValidator->validateCreateRequest($request_body, $resourceName);
+
+        $data = $request_body['data'];
 
         return new CreateRequest(
             $resourceName,
-            $this->createAttributeBag($resourceName, $request->get('data')),
+            $this->createAttributeBag($resourceName, $data),
             $this->createRelationshipBag(
-                $request->get('data'),
-                $request->request->get('data_as_object'),
+                $data,
                 false
             )
         );
@@ -230,13 +236,19 @@ class RequestFactory
     {
         $requestContent = $request->getContent();
         $requestBody = \json_decode($requestContent, true);
+
         if (!is_array($requestBody)) {
             throw InvalidRequest::createWithMessage('data.id', 'invalid_format', 'The body is not a valid json');
         }
+    }
 
-        $requestBody['data_as_object'] = \json_decode($requestContent)->data;
-
-        $request->request->replace($requestBody);
+    private function getData(Request $request, $associative = NULL) {
+        $requestContent = $request->getContent();
+        $requestBody = \json_decode($requestContent, $associative);
+        if (!is_array($requestBody)) {
+            throw InvalidRequest::createWithMessage('data.id', 'invalid_format', 'The body is not a valid json');
+        }
+        return $associative ? $requestBody['data'] : $requestBody->data;
     }
 
     /**
@@ -413,14 +425,13 @@ class RequestFactory
 
     /**
      * @param array     $data
-     * @param \stdClass $dataAsObject
      * @param bool      $acceptNull
      *
      * @return ResourceRelationshipBag
      *
      * @throws InvalidRequest
      */
-    private function createRelationshipBag($data, $dataAsObject, $acceptNull)
+    private function createRelationshipBag($data, $acceptNull)
     {
         $resourceConfig = $this->resourceConfigProvider->getResourceConfig($data['type']);
         $rawRelationships = isset($data['relationships']) ? $data['relationships'] : [];
@@ -444,7 +455,7 @@ class RequestFactory
             }
             $relationshipType = $this->resourceConfigProvider->getResourceConfig($data['type'])->getRelationship($relationshipName)->getType();
             $entityClass = $this->resourceConfigProvider->getResourceConfig($relationshipType)->getEntityClass();
-            if (isset($dataAsObject->relationships->$relationshipName->data) && is_object($dataAsObject->relationships->$relationshipName->data)) {
+            if (isset($data['relationships'][$relationshipName]['data']) && is_array($data['relationships'][$relationshipName]['data'])) {
                 $this->validateKeys('data.relationships.'.$relationshipName.'.data', $rawRelationship, ['id', 'type']);
                 $id = $rawRelationship['id'];
                 $this->validateRelationshipType(

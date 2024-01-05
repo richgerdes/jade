@@ -38,17 +38,18 @@ use Trivago\Jade\Application\Listener\ListenerManager;
 use Trivago\Jade\Domain\Resource\Exception\InvalidPath;
 use Trivago\Jade\Domain\ResourceManager\Exception\InvalidModelSet;
 use Trivago\Jade\Domain\ResourceManager\Exception\ModelException;
+use Trivago\Jade\Domain\ResourceManager\GenericResourceManager;
 use Trivago\Jade\Domain\ResourceManager\Repository\ResourceCounter;
 use Trivago\Jade\Domain\ResourceManager\Repository\ResourceRepository;
 use Trivago\Jade\Domain\ResourceManager\Repository\ResourceRepositoryProvider;
 use Trivago\Jade\Domain\ResourceManager\ResourceManager;
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Trivago\Jade\Application\Response\JsonApiResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Neomerx\JsonApi\Http\Request as JsonApiRequest;
 use Trivago\Jade\Domain\Mapping\ResourceMapper;
 
-class JsonApiController extends Controller
+class JsonApiController extends AbstractController
 {
     const JSON_ENCODE_FLAGS = JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES;
 
@@ -94,12 +95,23 @@ class JsonApiController extends Controller
         ResourceRepositoryProvider $resourceRepositoryProvider,
         RequestFactory $requestFactory,
         ListenerManager $listenerManager,
-        RequestStack $requestStack
     ) {
         $this->resourceConfigProvider = $resourceConfigProvider;
         $this->resourceRepositoryProvider = $resourceRepositoryProvider;
         $this->requestFactory = $requestFactory;
         $this->listenerManager = $listenerManager;
+    }
+
+    public static function getSubscribedServices(): array
+    {
+        return array_merge(parent::getSubscribedServices(), [
+            'trivago_jade.resource_config_provider' => '?'. ResourceConfigProvider::class,
+            'trivago_jade.resource_repository_provider' => '?'. ResourceRepositoryProvider::class,
+            'trivago_jade.request_factory' => '?'. RequestFactory::class,
+            'trivago_jade.listener_manager' => '?'. ListenerManager::class,
+            'trivago_jade.resource_mapper' => '?'. ResourceMapper::class,
+            'trivago_jade.generic_resource_manager' => '?' . GenericResourceManager::class,
+        ]);
     }
 
     /**
@@ -330,7 +342,7 @@ class JsonApiController extends Controller
 
         $resourceManagerServiceId = $this->resourceConfigProvider->getResourceConfig($resourceName)->getManagerServiceId();
         /** @var ResourceManager $manager */
-        $manager = $this->get($resourceManagerServiceId);
+        $manager = $this->container->get($resourceManagerServiceId);
 
         $entity = $manager->create(
             $request->getAttributes(),
@@ -382,7 +394,7 @@ class JsonApiController extends Controller
 
         $resourceManagerServiceId = $this->resourceConfigProvider->getResourceConfig($resourceName)->getManagerServiceId();
         /** @var ResourceManager $manager */
-        $manager = $this->get($resourceManagerServiceId);
+        $manager = $this->container->get($resourceManagerServiceId);
 
         $manager->update($entity, $request->getAttributes(), $request->getRelationships());
 
@@ -416,7 +428,7 @@ class JsonApiController extends Controller
 
         $schemas = [];
         /** @var ResourceMapper $resourceMapper */
-        $resourceMapper = $this->get('trivago_jade.resource_mapper');
+        $resourceMapper = $this->container->get('trivago_jade.resource_mapper');
         foreach ($this->resourceConfigProvider->getResourceConfigs() as $resourceConfig) {
             $schemaClosure = function (FactoryInterface $factory) use ($resourceConfig, $resourceMapper, $requestedRelationships) {
                 $schemaProviderClass = $resourceConfig->getSchemaProvider();
@@ -436,9 +448,12 @@ class JsonApiController extends Controller
                 $schemas[$classAlias] = $schemaClosure;
             }
         }
-        $encoderOptions = $this->getParameter('json_api_debug') ? new EncoderOptions(self::JSON_ENCODE_FLAGS) : null;
 
-        return $this->encoder = Encoder::instance($schemas, $encoderOptions);
+        $this->encoder = Encoder::instance($schemas);
+        if ($this->getParameter('json_api_debug')) {
+          $this->encoder->withEncodeOptions(self::JSON_ENCODE_FLAGS);
+        }
+        return $this->encoder;
     }
 
     /**

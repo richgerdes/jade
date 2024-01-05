@@ -18,7 +18,7 @@
 
 namespace Trivago\Jade\Application\JsonApi\Schema;
 
-use Neomerx\JsonApi\Document\Error;
+use Neomerx\JsonApi\Schema\Error;
 
 class InvalidRequest extends \RuntimeException
 {

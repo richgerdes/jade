@@ -23,6 +23,7 @@ use Trivago\Jade\Domain\ResourceManager\Bag\ResourceAttributeBag;
 use Trivago\Jade\Domain\ResourceManager\Bag\ResourceRelationshipBag;
 use Trivago\Jade\Domain\ResourceManager\Exception\InvalidModelSet;
 use Trivago\Jade\Domain\ResourceManager\Exception\MissingEntity;
+use Symfony\Component\PropertyAccess\PropertyAccess;
 
 class GenericResourceManager implements ResourceManager
 {
@@ -123,15 +124,25 @@ class GenericResourceManager implements ResourceManager
      */
     public function updateAttributes($entity, ResourceAttributeBag $resourceAttributeBag)
     {
+        $propertyAccessor = PropertyAccess::createPropertyAccessor();
         foreach ($resourceAttributeBag->getAllAttributeNames() as $attributeName) {
-            $method = 'set'.ucfirst($attributeName);
-            if (!method_exists($entity, $method)) {
-                throw new InvalidModelSet(
-                    'attributes.'.$attributeName,
-                    sprintf('Property "%s" can not be set as it has no setter.', $attributeName)
-                );
+            $value = $resourceAttributeBag->getValue($attributeName);
+
+            if (is_array($value)) {
+                $embedded = $propertyAccessor->getValue($entity, $attributeName);
+
+                if (!is_object($embedded) && !is_array($embedded)) {
+                    throw new RuntimeException('Invalid attribute structure. Attribute is not an object or array.');
+                }
+
+                foreach ($value as $embedded_property => $embedded_property_value) {
+                    $propertyAccessor->setValue($embedded, $embedded_property, $embedded_property_value);
+                }
+
             }
-            $entity->$method($resourceAttributeBag->getValue($attributeName));
+            else {
+                $propertyAccessor->setValue($entity, $attributeName, $value);
+            }
         }
     }
 
@@ -162,14 +173,7 @@ class GenericResourceManager implements ResourceManager
      */
     private function updateRelationship($relationshipName, Relationship $relationship, $entity)
     {
-        $method = 'set'.ucfirst($relationshipName);
-        if (!method_exists($entity, $method)) {
-            throw new InvalidModelSet(
-                'relationships.'.$relationshipName,
-                sprintf('Relationship "%s" can not be set as it has no setter.', $relationshipName)
-            );
-        }
-
-        $entity->$method($this->fieldResolver->getRelationshipValue($relationship));
+        $propertyAccessor = PropertyAccess::createPropertyAccessor();
+        $propertyAccessor->setValue($entity, $relationshipName, $this->fieldResolver->getRelationshipValue($relationship));
     }
 }
