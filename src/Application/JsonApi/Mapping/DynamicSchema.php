@@ -20,14 +20,17 @@ namespace Trivago\Jade\Application\JsonApi\Mapping;
 
 use Neomerx\JsonApi\Contracts\Document\LinkInterface;
 use Trivago\Jade\Application\JsonApi\Config\ResourceConfig;
-use Neomerx\JsonApi\Contracts\Schema\SchemaFactoryInterface;
-use Neomerx\JsonApi\Schema\SchemaProvider;
+use Neomerx\JsonApi\Contracts\Schema\ContextInterface;
+use Neomerx\JsonApi\Contracts\Factories\FactoryInterface;
+use Neomerx\JsonApi\Schema\BaseSchema;
+use Symfony\Component\PropertyAccess\PropertyAccess;
+use Trivago\Jade\Domain\Mapping\Property\EmbeddedProperty;
 use Trivago\Jade\Domain\Mapping\Property\Property;
 use Trivago\Jade\Domain\Mapping\ResourceMapper;
 use Trivago\Jade\Domain\Mapping\Value;
 use Trivago\Jade\Domain\ResourceManager\Exception\InvalidModelPath;
 
-class DynamicSchema extends SchemaProvider
+class DynamicSchema extends BaseSchema
 {
     /**
      * @var ResourceConfig
@@ -50,14 +53,14 @@ class DynamicSchema extends SchemaProvider
     private $urlPrefix;
 
     /**
-     * @param SchemaFactoryInterface $factory
-     * @param ResourceConfig         $resourceConfig
-     * @param ResourceMapper         $resourceMapper
-     * @param array                  $requestedRelationships
-     * @param string                 $urlPrefix
+     * @param FactoryInterface $factory
+     * @param ResourceConfig   $resourceConfig
+     * @param ResourceMapper   $resourceMapper
+     * @param array            $requestedRelationships
+     * @param string           $urlPrefix
      */
     public function __construct(
-        SchemaFactoryInterface $factory,
+        FactoryInterface $factory,
         ResourceConfig $resourceConfig,
         ResourceMapper $resourceMapper,
         array $requestedRelationships,
@@ -82,7 +85,14 @@ class DynamicSchema extends SchemaProvider
     /**
      * {@inheritdoc}
      */
-    public function getId($resource)
+    public function getType(): string {
+      return $this->resourceConfig->getName();
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function getId($resource): ?string
     {
         return $resource->getId();
     }
@@ -94,13 +104,28 @@ class DynamicSchema extends SchemaProvider
      *
      * @return array
      */
-    public function getAttributes($resource)
+    public function getAttributes($resource, ContextInterface $context): iterable
     {
+        $propertyAccessor = PropertyAccess::createPropertyAccessor();
         $resourceMapping = $this->resourceMapper->getResourceMapping($this->resourceConfig->getName(), $resource);
         $attributes = [];
         foreach ($resourceMapping->getProperties() as $property) {
-
             $value = $this->getPropertyValue($resource, $property);
+
+            if ($property instanceof EmbeddedProperty) {
+              $embedded = $value->getValue();
+
+              if (is_object($embedded)) {
+                $embedded_reflection = new \ReflectionClass($embedded);
+
+                $embedded_value = [];
+                foreach ($embedded_reflection->getProperties() as $embedded_property) {
+                  $embedded_value[$embedded_property->getName()] = $propertyAccessor->getValue($embedded, $embedded_property->getName());
+                }
+
+                $value = new Value($embedded_value);
+              }
+            }
 
             if (null !== $value) {
                 if (!$this->isSimpleValue($value->getValue())) {
@@ -116,7 +141,7 @@ class DynamicSchema extends SchemaProvider
     /**
      * {@inheritdoc}
      */
-    public function getSelfSubUrl($resource = null)
+    protected function getSelfSubUrl($resource): string
     {
         return $this->urlPrefix.parent::getSelfSubUrl($resource);
     }
@@ -126,11 +151,11 @@ class DynamicSchema extends SchemaProvider
      *
      * @throws InvalidModelPath
      */
-    public function getRelationships($resource, $isPrimary, array $includeRelationships)
+    public function getRelationships($resource, ContextInterface $context): iterable
     {
         $relationships = [];
         $resourceMapping = $this->resourceMapper->getResourceMapping($this->resourceConfig->getName(), $resource);
-        foreach ($includeRelationships as $relationshipName) {
+        foreach ($context->getIncludePaths() as $relationshipName) {
             if (!$resourceMapping->hasRelationship($relationshipName)) {
                 throw new InvalidModelPath($relationshipName);
             }
@@ -172,9 +197,12 @@ class DynamicSchema extends SchemaProvider
      */
     protected function getPropertyValue($resource, Property $property)
     {
-        $method = $property->getMethod();
+        $name = $property->getName();
 
-        return new Value($resource->$method());
+        $propertyAccessor = PropertyAccess::createPropertyAccessor();
+        $value = $propertyAccessor->getValue($resource, $name);
+
+        return new Value($value);
     }
 
     /**

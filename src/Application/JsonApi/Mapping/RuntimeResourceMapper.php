@@ -18,6 +18,9 @@
 
 namespace Trivago\Jade\Application\JsonApi\Mapping;
 
+use Doctrine\Common\Annotations\AnnotationReader;
+use Doctrine\ORM\Mapping\Embedded;
+
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 use Trivago\Jade\Application\JsonApi\Config\ResourceConfig;
@@ -25,6 +28,7 @@ use Trivago\Jade\Application\JsonApi\Config\ResourceConfigProvider;
 use Trivago\Jade\Application\Security\AttributePermission;
 use Trivago\Jade\Application\Security\AttributePermissionByMethod;
 use Trivago\Jade\Application\Security\AttributePermissionByRole;
+use Trivago\Jade\Domain\Mapping\Property\EmbeddedProperty;
 use Trivago\Jade\Domain\Mapping\Property\StaticProperty;
 use Trivago\Jade\Domain\Mapping\Property\VirtualProperty;
 use Trivago\Jade\Domain\Mapping\ResourceMapper;
@@ -85,6 +89,8 @@ class RuntimeResourceMapper implements ResourceMapper
      */
     private function setupAttributes(\ReflectionClass $reflection, ResourceConfig $resourceConfig, $resource, ResourceMapping $mapping)
     {
+        $reader = new AnnotationReader();
+
         foreach ($reflection->getProperties() as $property) {
             $propertyName = $property->getName();
             if (
@@ -96,16 +102,25 @@ class RuntimeResourceMapper implements ResourceMapper
             }
 
             if ($resourceConfig->hasAttributePermissionFor($propertyName) && !$this->hasPermission($resource, $resourceConfig->getAttributePermissionsFor($propertyName))) {
-                    continue;
-                }
+                continue;
+            }
 
-            $ucPropertyName = ucfirst($propertyName);
-            $methods = ['get'.$ucPropertyName, 'has'.$ucPropertyName, 'is'.$ucPropertyName, $propertyName];
-            foreach ($methods as $method) {
-                if ($reflection->hasMethod($method)) {
-                    $mapping->addProperty(new StaticProperty($propertyName, $method));
+            $embedded_annotation = $reader->getPropertyAnnotation(
+                $property,
+                Embedded::class
+            );
+            if ($embedded_annotation) {
+                $mapping->addProperty(new EmbeddedProperty($propertyName));
+            }
+            else {
+                $ucPropertyName = ucfirst($propertyName);
+                $methods = ['get'.$ucPropertyName, 'has'.$ucPropertyName, 'is'.$ucPropertyName, $propertyName];
+                foreach ($methods as $method) {
+                    if ($reflection->hasMethod($method)) {
+                        $mapping->addProperty(new StaticProperty($propertyName, $method));
 
-                    break;
+                        break;
+                    }
                 }
             }
         }

@@ -115,7 +115,7 @@ class DoctrineResourceRepository implements ResourceRepository, ResourceCounter
         $queryBuilder->groupBy('r.id');
 
         $idsResult = $queryBuilder->getQuery()->getScalarResult();
-        $ids = array_map('array_pop', $idsResult);
+        $ids = array_column($idsResult, 'id');
 
         $idsConstraint = new Constraint();
         $idsConstraint->setPerPage(PHP_INT_MAX);
