@@ -21,6 +21,7 @@ namespace Trivago\Jade\Application\JsonApi\Mapping;
 use Neomerx\JsonApi\Contracts\Document\LinkInterface;
 use Trivago\Jade\Application\JsonApi\Config\ResourceConfig;
 use Neomerx\JsonApi\Contracts\Schema\ContextInterface;
+use Neomerx\JsonApi\Contracts\Schema\DocumentInterface;
 use Neomerx\JsonApi\Contracts\Factories\FactoryInterface;
 use Neomerx\JsonApi\Schema\BaseSchema;
 use Symfony\Component\PropertyAccess\PropertyAccess;
@@ -155,6 +156,7 @@ class DynamicSchema extends BaseSchema
     {
         $relationships = [];
         $resourceMapping = $this->resourceMapper->getResourceMapping($this->resourceConfig->getName(), $resource);
+
         foreach ($context->getIncludePaths() as $relationshipName) {
             if (!$resourceMapping->hasRelationship($relationshipName)) {
                 throw new InvalidModelPath($relationshipName);
@@ -163,7 +165,7 @@ class DynamicSchema extends BaseSchema
             $value = $this->getPropertyValue($resource, $resourceMapping->getRelationship($relationshipName));
             if (null !== $value) {
                 $relationships[$relationshipName] = [
-                    self::DATA => $value->getValue(),
+                    static::RELATIONSHIP_DATA => $value->getValue(),
                 ];
             }
         }

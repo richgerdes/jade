@@ -450,6 +450,7 @@ class JsonApiController extends AbstractController
         }
 
         $this->encoder = Encoder::instance($schemas);
+        $this->encoder->withIncludedPaths($requestedRelationships);
         if ($this->getParameter('json_api_debug')) {
           $this->encoder->withEncodeOptions(self::JSON_ENCODE_FLAGS);
         }
